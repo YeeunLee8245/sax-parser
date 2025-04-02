@@ -9,17 +9,18 @@ const KEY_TYPE = {
 
 type TKeyType = typeof KEY_TYPE[keyof typeof KEY_TYPE]
 
-const TAG_TYPE = {
-  CLOSE: 0,
-  OPEN: 1,
-} as const;
+// const TAG_TYPE = {
+//   CLOSE: 0,
+//   OPEN: 1,
+// } as const;
 
-type TTagType = typeof TAG_TYPE[keyof typeof TAG_TYPE]
+// type TTagType = typeof TAG_TYPE[keyof typeof TAG_TYPE]
 
 type TSelector = { key: string; value?: string };
 
 type TTag = {
-  type: TTagType;
+  // type: TTagType;
+  isFind: boolean;
   name: string;
   // id?: string;
   selectors: TSelector[];
@@ -30,7 +31,8 @@ export class SAXParser {
   tagStack: TTag[] = []
   charStack: string[] = []
   
-  isFind: boolean = false;
+  // isFind: boolean = false;
+  isPrint: boolean = false;
   
   startRegex = /<[^/>]+>/ // <(오른쪽 꺾쇠와 /를 제외한 아무 문자)>
   endRegex = /<\/[^>]+>/ // </(오른쪽 꺾쇠를 제외한 아무 문자)>
@@ -80,36 +82,38 @@ export class SAXParser {
     console.log('tag stack', JSON.stringify(this.tagStack));
   }
   
-  #setIsFindTag(tag: TTag, type: TKeyType, key: string) {
+  #setIsFindTag(tagName: string, selectors: TSelector[], type: TKeyType, key: string):boolean {
     switch (type) {
       case KEY_TYPE.TAG: 
-        this.isFind = tag.name === key;
-        break;
+        return tagName === key;
       case KEY_TYPE.ID: 
-        const idValue = tag.selectors.find((selector) => selector.key === 'id')?.value;
-        this.isFind = idValue === key;
-        break;
+        const idValue = selectors.find((selector) => selector.key === 'id')?.value;
+       return idValue === key;
       case KEY_TYPE.SELECTOR:
         const [targetKey, targetValue] = key.split('=')
         // const { key: targetKey, value: targetValue } = { key: key.split('=')[0] };
-        const selector = tag.selectors.find((selector) => selector.key === targetKey);
+        const selector = selectors.find((selector) => selector.key === targetKey);
         if (selector) {
-          this.isFind = targetValue === selector.value;
+          return targetValue === selector.value;
         }
         break;
       default:
         break;
     }
+    return false;
   }
   
-  #startElement(element: string, type: TKeyType, key: string) {
-    const elementLi = element.replace(/[<>]/g, '').split(' ')
-    const tagInfo = elementLi.splice(0, 1); // tagInfo: ['p']
-    const tagItem: TTag = {
-      type: TAG_TYPE.OPEN,
-      name: tagInfo[0],
-      selectors: []
-    }
+  #startElement(element: string, type: TKeyType, key: string) {    
+    const elementLi = element.replace(/[<>]/g, '').split(' ');
+    
+    let isFind = false;
+    const tagName = elementLi.splice(0, 1)[0]; // tagInfo: ['p']
+    const selectors = []
+    // const tagItem: TTag = {
+    //   isFind: false, // default setting
+    //   name: tagInfo[0],
+    //   selectors: []
+    // }
     // console.log('test tagItem', tagItem);
     
     let targetString = ''
@@ -121,7 +125,7 @@ export class SAXParser {
         const match = targetString.match(this.selectorRegex);
         // console.log('match', match && match[1], match && match[2]);
         if (match)
-          tagItem.selectors.push({ key: match[1], value: match[2] })
+          selectors.push({ key: match[1], value: match[2] })
         
         targetString = ''
         continue;
@@ -129,26 +133,31 @@ export class SAXParser {
       
       if (this.onlyKeySelectorRegex.test(targetString)) {
         // console.log('------------test onlyKey', targetString)
-        tagItem.selectors.push({ key: targetString });
+        selectors.push({ key: targetString });
         
         targetString = ''
         continue;
       }
     }
     
-    if (!this.isFind) {
-      this.#setIsFindTag(tagItem, type, key)
-    }
+    isFind = this.#setIsFindTag(tagName, selectors, type, key)
     
-    if (this.isFind) {
+    if (this.tagStack.filter((tag) => tag.isFind).length > 0 || isFind) {
+      this.isPrint = true;
       console.log('startElement :', element)
+    } else {
+      this.isPrint = false;
     }
     
-    this.tagStack.push(tagItem)
+    this.tagStack.push({
+      isFind,
+      name: tagName,
+      selectors
+    })
   }
   
   #characters(charses: string) {
-    if (this.isFind) {
+    if (this.isPrint) {
       console.log('startElement :', charses)
     }
   }
@@ -159,14 +168,30 @@ export class SAXParser {
     const tagInfo = elementLi.splice(0, 1); // tagInfo: ['p']
     // console.log('tagInfo', tagInfo);
     
-    if (this.tagStack.at(-1)?.name === tagInfo[0]) {
-      if (this.isFind) {
-      console.log('endElement', element)
-      }
-      
-      this.tagStack.pop();
-      this.isFind = false;
+    if (this.isPrint) {
+      console.log('endElement :', element);
     }
+    
+    const tagStackTop = this.tagStack.at(-1);
+    // console.log('test end------------', JSON.stringify(this.tagStack))
+    if (tagStackTop?.name === tagInfo[0]) {
+     if (tagStackTop?.isFind) {   
+      // console.log('test check popㅡㅡㅡㅡㅡㅡㅡㅡㅡ', tagStackTop.name, tagStackTop.isFind)
+      // console.log('popㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ',this.tagStack.pop());
+      this.isPrint = false;
+     }
+      this.tagStack.pop()
+    }
+    
+    
+    // if (this.tagStack.at(-1)?.name === tagInfo[0]) {
+    //   if (this.isPrint) {
+    //   console.log('endElement', element)
+    //   }
+      
+    //   this.tagStack.pop();
+    //   this.isFind = false;
+    // }
   }
   
   #clearStack() {
