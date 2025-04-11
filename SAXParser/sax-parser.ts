@@ -32,15 +32,15 @@ export class SAXParser {
   
   constructor(file: string) {
     const fileString = readFileSync(file, 'utf-8');
-    this.words = fileString.split(''); // 띄어쓰기, 탭, 줄바꿈 기준으로 단어 split
+    this.words = fileString.split(''); // 문자 하나하나 탐색을 위해 split
   }
     
   #parser(type: TKeyType, key: string) {
     let targetString = ''
     
-    for (let word of this.words) {
+    for (let word of this.words) { // 문자 하나씩 탐색
       // characters
-      if (word === '<' && targetString) {
+      if (word === '<' && targetString) { // 닫힘 태그 꺽쇠 이전 문자열 체크(문자열이 존재하는 경우)
         if (targetString.trim().length) { // 공백(띄어쓰기, 탭, 들여쓰기)로만 이루어진 문자열 제외
           this.#characters(targetString)
         }
@@ -50,14 +50,14 @@ export class SAXParser {
       targetString += word;
       
       // startElement
-      if (this.startRegex.test(targetString)) {
+      if (this.startRegex.test(targetString)) { // 시작 태그 체크
         this.#startElement(targetString, type, key)
         targetString = '';
         continue;
       }
       
       // endElement
-      if (this.endRegex.test(targetString)) {
+      if (this.endRegex.test(targetString)) { // 닫힘 태그 체크
         this.#endElement(targetString)
         targetString = '';
         continue;
@@ -87,17 +87,18 @@ export class SAXParser {
   }
   
   #startElement(element: string, type: TKeyType, key: string) {     
-    const elementLi = element.replace(/[<>]/g, '').split(' ');
+    const elementLi = element.replace(/[<>]/g, '').split(' '); // 꺽쇠 제거, 단어별 구분
     
     let isFind = false;
     const tagName = elementLi.splice(0, 1)[0]; // tagInfo: 'p'
     const selectors = []
     
     let targetString = ''
-    for (let w of elementLi) {
+    for (let w of elementLi) { // 단어 하나씩 탐색
       targetString += w;
       
-      if (this.selectorRegex.test(targetString)) {
+      if (this.selectorRegex.test(targetString)) { // (key)="(value)" 형태 체크
+        // key=value 형태로 분리
         const match = targetString.match(this.selectorRegex);
         if (match)
           selectors.push({ key: match[1], value: match[2] })
@@ -106,7 +107,7 @@ export class SAXParser {
         continue;
       }
       
-      if (this.onlyKeySelectorRegex.test(targetString)) {
+      if (this.onlyKeySelectorRegex.test(targetString)) { // (key) 형태 체크
         selectors.push({ key: targetString });
         
         targetString = ''
@@ -114,20 +115,20 @@ export class SAXParser {
       }
     }
     
-    isFind = this.#setIsFindTag(tagName, selectors, type, key)
+    isFind = this.#setIsFindTag(tagName, selectors, type, key) // 태그 정보 기반 매칭
     
-    if (this.tagStack.filter((tag) => tag.isFind).length > 0 || isFind) {
+    if (isFind) { //(this.tagStack.filter((tag) => tag.isFind).length > 0 || isFind) {
       this.isPrint = true;
       this.resultArr.push(element);
     } else {
       this.isPrint = false;
     }
     
-    this.tagStack.push({
-      isFind,
-      name: tagName,
-      selectors
-    })
+    // this.tagStack.push({
+    //   isFind,
+    //   name: tagName,
+    //   selectors
+    // })
   }
   
   #characters(charses: string) {
@@ -137,24 +138,25 @@ export class SAXParser {
   }
   
   #endElement(element: string) {
-    const elementLi = element.replace(/[</>]/g, '').split(' ')
-    const tagInfo = elementLi.splice(0, 1)[0]; // tagInfo: ['p']
+    // const elementLi = element.replace(/[</>]/g, '').split(' ')
+    // const tagInfo = elementLi.splice(0, 1)[0]; // tagInfo: ['p']
     
     if (this.isPrint) {
       this.resultArr[this.resultArr.length - 1] += element;
+      this.isPrint = false; // 중첩 tag 적용 시엔 제거
     }
     
-    const tagStackTop = this.tagStack.at(-1);
-    if (tagStackTop?.name === tagInfo) {
-     if (tagStackTop?.isFind) {   
-      this.isPrint = false;
-     }
-      this.tagStack.pop()
-    }
+    // const tagStackTop = this.tagStack.at(-1);
+    // if (tagStackTop?.name === tagInfo) {
+    //  if (tagStackTop?.isFind) {
+    //   this.isPrint = false;
+    //  }
+      // this.tagStack.pop()
+    // }
   }
   
   #clearStack() {
-    this.tagStack = []
+    // this.tagStack = []
     this.resultArr = []
   }
   
